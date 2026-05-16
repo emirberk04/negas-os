@@ -17,44 +17,51 @@ export type EnrichedNews = {
   impact_assets: string[];
 };
 
-const SYSTEM_PROMPT = `Sen bir kuyumcu atölyesi için çalışan altın piyasası haber editörüsün.
-Görevin: Verilen ham haber başlığını TV ekranı için optimize etmek.
+const SYSTEM_PROMPT = `Kuyumcu atölyesi için altın piyasası haber editörüsün.
+TV başlığı optimize et.
 
-KURALLAR:
-- Türkçe yaz (İngilizce gelirse çevir)
-- Tek satır, max 60 karakter
-- Yalın, yorum katma, başlık tarzında
-- Sayı varsa koru ($47, %2.3 gibi)
-- Kuruluş isimlerini kısalt: Federal Reserve → Fed, Türkiye Cumhuriyet Merkez Bankası → TCMB
-- Clickbait kelimeleri sil: "İşte!", "Şok!", "Müthiş!", "Son dakika:"
+KURAL:
+- Türkçe, max 60 karakter, tek satır
+- Yalın başlık, yorum yok
+- Sayıları koru ($47, %2.3)
+- Kısalt: Federal Reserve→Fed, TCMB
+- Clickbait sil: "Şok!", "İşte!", "Son dakika:"
 
-sentiment ne demek (altın açısından):
-- positive = altın YÜKSELTİCİ haber (Fed faiz indirimi, jeopolitik gerilim, enflasyon korkusu)
-- negative = altın DÜŞÜRÜCÜ haber (faiz artırımı, dolar güçlenmesi, risk iştahı dönüşü)
-- neutral = etkisi belirsiz
+sentiment (altın):
+- positive = altın YÜKSELTİCİ (faiz indirimi, jeopolitik gerilim)
+- negative = altın DÜŞÜRÜCÜ (faiz artırımı, dolar güçlenmesi)
+- neutral = etkisiz
 
-ÇIKTI: SADECE geçerli JSON, başka metin yok.`;
+SADECE JSON döndür.`;
+
+// "Mutlaka altınla alakalı" sayılan güçlü sinyaller — bunlardan biri yoksa AI'ya gönderme
+const STRONG_SIGNALS = [
+  "altın", "altin", "ons", "gram altın", "çeyrek", "cumhuriyet", "ata altın",
+  "reşat", "has altın", "gümüş", "gumus", "platin", "külçe", "ayar", "bilezik",
+  "fed", "fomc", "faiz", "enflasyon", "tüfe", "üfe", "tcmb", "merkez banka",
+  "dolar", "usd", "euro", "eur", "döviz", "kur", "rezerv",
+  "şimşek", "karahan", "powell", "lagarde", "trump", "erdoğan",
+  "iran", "israil", "rusya", "ukrayna", "çin", "tarife", "savaş", "ateşkes",
+  "petrol", "brent", "opec",
+  "gold", "silver", "precious", "bullion", "inflation", "rate cut", "rate hike",
+  "treasury", "dxy",
+];
+
+export function hasStrongSignal(title: string): boolean {
+  const lower = title.toLowerCase();
+  return STRONG_SIGNALS.some((kw) => lower.includes(kw));
+}
 
 function buildUserPrompt(
   title: string,
   source: string,
-  publishedAt: string | null
+  _publishedAt: string | null
 ): string {
-  return `HABER:
+  return `Kaynak: ${source}
 Başlık: "${title}"
-Kaynak: ${source}
-Tarih: ${publishedAt ?? "bilinmiyor"}
 
-Çıktı formatı:
-{
-  "title_tr": "Türkçe temiz başlık, max 60 karakter",
-  "summary_short": "Aynı başlık ama 40 karakter (TV ticker için)",
-  "summary_medium": "1-2 cümle özet, max 200 karakter",
-  "category": "altin | fed | tcmb | dolar | jeopolitik | enflasyon | diger",
-  "sentiment": "positive | negative | neutral",
-  "relevance": 1-10 sayı (altın fiyatına direkt etki, 10 = çok etkili),
-  "impact_assets": ["ONS"|"GRAM_ALTIN"|"USD_TRY"|"EUR_TRY"]
-}`;
+JSON:
+{"title_tr":"max 60 kar","summary_short":"max 40 kar","summary_medium":"1-2 cümle max 200 kar","category":"altin|fed|tcmb|dolar|jeopolitik|enflasyon|diger","sentiment":"positive|negative|neutral","relevance":1-10,"impact_assets":["ONS"|"GRAM_ALTIN"|"USD_TRY"|"EUR_TRY"]}`;
 }
 
 function safeJsonParse(text: string): unknown {
@@ -73,8 +80,15 @@ export async function enrichNews(input: {
 }): Promise<EnrichedNews> {
   const msg = await client.messages.create({
     model: HAIKU_MODEL,
-    max_tokens: 400,
-    system: SYSTEM_PROMPT,
+    max_tokens: 220,
+    // System prompt'u cache'le — ardarda çağrılarda %90 input maliyet düşer
+    system: [
+      {
+        type: "text",
+        text: SYSTEM_PROMPT,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
     messages: [{ role: "user", content: buildUserPrompt(input.title, input.source, input.publishedAt) }],
   });
 

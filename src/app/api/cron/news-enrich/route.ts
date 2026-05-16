@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { enrichNews } from "@/lib/anthropic";
+import { enrichNews, hasStrongSignal } from "@/lib/anthropic";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
@@ -7,9 +7,11 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 // Bir cron tetiklemesinde max kaç haber işlensin
-const BATCH_SIZE = 15;
+const BATCH_SIZE = 10;
 // Paralel kaç Haiku çağrısı
-const CONCURRENCY = 5;
+const CONCURRENCY = 4;
+// Bu kadar saatten eski haberi enrich'e gönderme
+const MAX_AGE_HOURS = 4;
 
 async function processInBatches<T, R>(
   items: T[],
@@ -52,13 +54,18 @@ export async function GET(req: Request) {
 
   const started = Date.now();
 
-  // title_tr olmayan en son haberleri al
-  const { data: pending, error: fetchErr } = await sb
+  // title_tr olmayan + son MAX_AGE_HOURS saat içinde yayınlanmış haberleri al
+  const minPublished = new Date(
+    Date.now() - MAX_AGE_HOURS * 3600 * 1000
+  ).toISOString();
+
+  const { data: raw, error: fetchErr } = await sb
     .from("news")
     .select("id, title_original, source_name, published_at")
     .is("title_tr", null)
+    .gte("published_at", minPublished)
     .order("published_at", { ascending: false, nullsFirst: false })
-    .limit(BATCH_SIZE);
+    .limit(BATCH_SIZE * 3); // Geniş çek, zayıf sinyalli olanları eleyelim
 
   if (fetchErr) {
     return NextResponse.json(
@@ -67,20 +74,52 @@ export async function GET(req: Request) {
     );
   }
 
-  if (!pending || pending.length === 0) {
+  // Akıllı ön-filtre: güçlü sinyal yoksa AI'ya gönderme, "neutral" işaretle bitir
+  const candidates = raw ?? [];
+  const skipIds: number[] = [];
+  const pending = candidates.filter((n) => {
+    if (hasStrongSignal(n.title_original)) return true;
+    skipIds.push(n.id);
+    return false;
+  });
+
+  // Zayıf sinyallileri AI'ya gönderme — bir daha pending'e girmesinler diye
+  // title_tr'yi orijinaliyle dolduruyoruz (UI değişmez, sadece tekrar işlenmez)
+  if (skipIds.length > 0) {
+    const skipped = candidates.filter((c) => skipIds.includes(c.id));
+    // Tek tek update — supabase'de bulk-update-with-different-values yok
+    await Promise.all(
+      skipped.map((s) =>
+        sb
+          .from("news")
+          .update({
+            title_tr: s.title_original.slice(0, 120),
+            sentiment: "neutral",
+            relevance: 2,
+            category: "diger",
+          })
+          .eq("id", s.id)
+      )
+    );
+  }
+
+  if (pending.length === 0) {
     return NextResponse.json({
       ok: true,
       processed: 0,
-      reason: "no pending news",
+      candidates: candidates.length,
+      preFiltered: skipIds.length,
       tookMs: Date.now() - started,
     });
   }
+
+  const toProcess = pending.slice(0, BATCH_SIZE);
 
   let succeeded = 0;
   let failed = 0;
   const errors: string[] = [];
 
-  const settled = await processInBatches(pending, CONCURRENCY, async (n) => {
+  const settled = await processInBatches(toProcess, CONCURRENCY, async (n) => {
     try {
       const enriched = await enrichNews({
         title: n.title_original,
@@ -130,7 +169,9 @@ export async function GET(req: Request) {
 
   return NextResponse.json({
     ok: true,
-    processed: pending.length,
+    candidates: candidates.length,
+    preFiltered: skipIds.length,
+    aiProcessed: toProcess.length,
     succeeded,
     failed,
     errors: errors.length ? errors : undefined,
