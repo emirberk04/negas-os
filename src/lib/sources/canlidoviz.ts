@@ -1,4 +1,4 @@
-// canlidoviz.com scraper — tek HTTP isteğiyle ~30 ürün
+// canlidoviz.com scraper — ana sayfa (döviz) + altın sayfası birleştirilir
 // HTML değişirse parser kırılır; o gün yedek kaynak ekleyeceğiz.
 
 export type ScrapedPrice = {
@@ -9,44 +9,33 @@ export type ScrapedPrice = {
 
 // cid → bizim sembol
 const SYMBOL_MAP: Record<string, string> = {
-  // Döviz
+  // Döviz (ana sayfa)
   "1": "USD_TRY",
   "50": "EUR_TRY",
   "100": "GBP_TRY",
-  // Altın
+  // Altın (altın-fiyatlari sayfası)
   "32": "GRAM_ALTIN",
   "12": "ONS_USD",
   "1179": "HAS_ALTIN",
-  "11": "CEYREK_YENI",
   "1065": "CEYREK_ESKI",
-  "47": "YARIM_YENI",
   "1066": "YARIM_ESKI",
   "14": "TAM_YENI",
   "1067": "TAM_ESKI",
-  "27": "CUMHURIYET",
-  "58": "ATA",
   "43": "RESAT",
-  "18": "BILEZIK_22",
-  "16": "AYAR_14",
-  "55": "AYAR_18",
   "20": "GUMUS_TRY",
 };
 
-const PAIR_RE =
-  /cid="(\d+)"[^>]*dt="(bA|amount)"[^>]*>\s*([\d.]+)/g;
+const PAIR_RE = /cid="(\d+)"[^>]*dt="(bA|amount)"[^>]*>\s*([\d.]+)/g;
 
-export async function fetchCanlidoviz(): Promise<ScrapedPrice[]> {
-  const res = await fetch("https://canlidoviz.com", {
-    headers: {
-      "User-Agent":
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
-      Accept: "text/html",
-    },
+const UA =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+async function fetchPairs(url: string): Promise<Record<string, { bA?: number; amount?: number }>> {
+  const res = await fetch(url, {
+    headers: { "User-Agent": UA, Accept: "text/html" },
     cache: "no-store",
   });
-  if (!res.ok) {
-    throw new Error(`canlidoviz HTTP ${res.status}`);
-  }
+  if (!res.ok) throw new Error(`canlidoviz HTTP ${res.status} on ${url}`);
   const html = await res.text();
 
   const pairs: Record<string, { bA?: number; amount?: number }> = {};
@@ -57,10 +46,29 @@ export async function fetchCanlidoviz(): Promise<ScrapedPrice[]> {
     if (!Number.isFinite(num)) continue;
     (pairs[cid] ||= {})[dt as "bA" | "amount"] = num;
   }
+  return pairs;
+}
+
+export async function fetchCanlidoviz(): Promise<ScrapedPrice[]> {
+  // Döviz ana sayfada, altın detay sayfasında — paralel çek, birleştir
+  const [home, gold] = await Promise.all([
+    fetchPairs("https://canlidoviz.com"),
+    fetchPairs("https://canlidoviz.com/altin-fiyatlari"),
+  ]);
+
+  const merged: Record<string, { bA?: number; amount?: number }> = { ...home };
+  for (const [cid, vals] of Object.entries(gold)) {
+    // Altın sayfası daha geniş, mevcut altın ürünleri için altın sayfasını tercih et
+    if (cid !== "1" && cid !== "50" && cid !== "100") {
+      merged[cid] = vals;
+    } else if (!merged[cid]) {
+      merged[cid] = vals;
+    }
+  }
 
   const out: ScrapedPrice[] = [];
   for (const [cid, sym] of Object.entries(SYMBOL_MAP)) {
-    const p = pairs[cid];
+    const p = merged[cid];
     if (!p || p.bA == null || p.amount == null) continue;
     out.push({ symbol: sym, bid: p.bA, ask: p.amount });
   }
