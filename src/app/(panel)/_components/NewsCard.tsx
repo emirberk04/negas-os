@@ -11,7 +11,7 @@ const SAMPLE = [
 export function NewsCard() {
   return (
     <Panel
-      number="08"
+      number="07"
       title="HABER AKIŞI"
       meta="FAZ 4 · BEKLEMEDE"
     >

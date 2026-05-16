@@ -70,7 +70,7 @@ export function MainPricesCard({ initial, history }: Props) {
   }, []);
 
   return (
-    <Panel number="05" title="ANA FİYATLAR" meta={`${MAIN_SYMBOLS.length} VARLIK`}>
+    <Panel number="03" title="ANA FİYATLAR" meta={`${MAIN_SYMBOLS.length} VARLIK · 60 DK`}>
       <div className="space-y-3">
         {MAIN_SYMBOLS.map((meta) => {
           const r = rows[meta.symbol];

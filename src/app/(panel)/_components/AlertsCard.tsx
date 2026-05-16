@@ -2,7 +2,7 @@ import { Panel } from "./Panel";
 
 export function AlertsCard() {
   return (
-    <Panel number="06" title="ALARM KUTUSU" meta="0 AKTİF">
+    <Panel number="04" title="ALARM KUTUSU" meta="0 AKTİF">
       <div className="space-y-3 text-[11px]">
         <div className="border-l-2 border-[var(--accent-warn)] bg-[var(--bg-elevated)] py-2 pl-3">
           <div className="flex items-baseline justify-between text-[10px] uppercase tracking-wider text-[var(--text-muted)]">

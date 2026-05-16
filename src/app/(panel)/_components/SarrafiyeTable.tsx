@@ -71,7 +71,7 @@ export function SarrafiyeTable({ initial, history }: Props) {
 
   return (
     <Panel
-      number="07"
+      number="05"
       title="SARRAFİYE"
       meta={`${SARRAFIYE_SYMBOLS.length} ÜRÜN · CANLI`}
     >

@@ -2,7 +2,7 @@ import { Panel } from "./Panel";
 
 export function BriefingCard() {
   return (
-    <Panel number="09" title="GÜN BRİFİNGİ" meta="FAZ 5 · CLAUDE">
+    <Panel number="06" title="GÜN BRİFİNGİ" meta="FAZ 5 · CLAUDE">
       <div className="space-y-3 text-[11px]">
         <div className="border-l-2 border-[var(--accent-blue)] bg-[var(--bg-elevated)] py-2 pl-3">
           <div className="text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
