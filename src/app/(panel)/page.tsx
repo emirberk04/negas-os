@@ -140,19 +140,23 @@ export default async function PanelPage() {
           />
         </div>
 
-        {/* Orta sıra — Ana fiyatlar + Alarm */}
+        {/* Ana fiyatlar */}
         <div className="col-span-12 lg:col-span-8">
           <MainPricesCard initial={mainInitial} history={history} />
         </div>
-        <div className="col-span-12 lg:col-span-4 flex flex-col gap-3">
+        <div className="col-span-12 lg:col-span-4">
           <BriefingCard number="04" initial={briefing} />
-          <AlertsCard number="06" initial={alerts} />
         </div>
 
-        {/* Sarrafiye + Ayar çevirici */}
+        {/* Sarrafiye — direkt altına */}
         <div className="col-span-12 lg:col-span-8">
           <SarrafiyeTable initial={sarrafiyeInitial} history={history} />
         </div>
+        <div className="col-span-12 lg:col-span-4">
+          <AlertsCard number="06" initial={alerts} />
+        </div>
+
+        {/* Ayar çevirici */}
         <div className="col-span-12 lg:col-span-4">
           <AyarConverter
             initialGramPrice={mainInitial["GRAM_ALTIN"] ?? null}
