@@ -21,13 +21,13 @@ export function TopBar() {
     const tick = () => {
       const d = new Date();
       setNow(
-        d.toLocaleTimeString("tr-TR", {
+        new Intl.DateTimeFormat("tr-TR", {
           hour: "2-digit",
           minute: "2-digit",
           second: "2-digit",
           hour12: false,
           timeZone: "Europe/Istanbul",
-        })
+        }).format(d)
       );
       setDate(fmtDate(d));
     };

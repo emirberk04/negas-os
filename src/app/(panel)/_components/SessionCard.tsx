@@ -15,19 +15,34 @@ const TR_DAYS = [
   "Pazar", "Pazartesi", "Salı", "Çarşamba", "Perşembe", "Cuma", "Cumartesi",
 ];
 
-function ist(): Date {
+const TZ = "Europe/Istanbul";
+
+function getISTparts() {
   const d = new Date();
-  const utc = d.getTime() + d.getTimezoneOffset() * 60_000;
-  return new Date(utc + 3 * 3600_000);
+  const fmt = (opts: Intl.DateTimeFormatOptions) =>
+    new Intl.DateTimeFormat("tr-TR", { timeZone: TZ, ...opts }).format(d);
+  return {
+    h: fmt({ hour: "2-digit", hour12: false }),
+    m: fmt({ minute: "2-digit" }),
+    s: fmt({ second: "2-digit" }),
+    day: parseInt(fmt({ weekday: "narrow" }) /* just need day-of-week index */),
+    hour24: parseInt(fmt({ hour: "2-digit", hour12: false })),
+    minute: parseInt(fmt({ minute: "2-digit" })),
+    dayOfWeek: new Intl.DateTimeFormat("en-US", {
+      timeZone: TZ,
+      weekday: "short",
+    }).format(d), // "Mon", "Sat", "Sun"
+    dayNum: parseInt(new Intl.DateTimeFormat("en-US", { timeZone: TZ, day: "numeric" }).format(d)),
+    month: parseInt(new Intl.DateTimeFormat("en-US", { timeZone: TZ, month: "numeric" }).format(d)) - 1,
+    year: parseInt(new Intl.DateTimeFormat("en-US", { timeZone: TZ, year: "numeric" }).format(d)),
+  };
 }
 
-function isMarketOpen(d: Date): boolean {
-  const day = d.getUTCDay();
-  const hour = d.getUTCHours();
-  const minute = d.getUTCMinutes();
-  const t = hour + minute / 60;
-  if (day === 0) return false;
-  if (day === 6) return t >= 9 && t < 13;
+function isMarketOpen(): boolean {
+  const { dayOfWeek, hour24, minute } = getISTparts();
+  const t = hour24 + minute / 60;
+  if (dayOfWeek === "Sun") return false;
+  if (dayOfWeek === "Sat") return t >= 9 && t < 13;
   return t >= 9 && t < 18;
 }
 
@@ -52,16 +67,16 @@ export function SessionCard({ weather, prayerSet, bayram }: Props) {
 
   useEffect(() => {
     const tick = () => {
-      const d = ist();
+      const p = getISTparts();
       setTime({
-        h: String(d.getUTCHours()).padStart(2, "0"),
-        m: String(d.getUTCMinutes()).padStart(2, "0"),
-        s: String(d.getUTCSeconds()).padStart(2, "0"),
+        h: p.h.padStart(2, "0"),
+        m: p.m.padStart(2, "0"),
+        s: p.s.padStart(2, "0"),
       });
       setDateStr(
-        `${d.getUTCDate()} ${TR_MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()} ${TR_DAYS[d.getUTCDay()]}`
+        `${p.dayNum} ${TR_MONTHS[p.month]} ${p.year} ${TR_DAYS[["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].indexOf(p.dayOfWeek)]}`
       );
-      setMarketOpen(isMarketOpen(d));
+      setMarketOpen(isMarketOpen());
       if (prayerSet) setNextPrayer(computeNextPrayer(prayerSet));
     };
     tick();
