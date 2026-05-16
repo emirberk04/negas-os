@@ -11,7 +11,7 @@ type Props = {
 export function Panel({ number, title, meta, children, className = "" }: Props) {
   return (
     <section
-      className={`border border-[var(--border)] bg-[var(--bg-panel)] ${className}`}
+      className={`flex h-full flex-col border border-[var(--border)] bg-[var(--bg-panel)] ${className}`}
     >
       <header className="flex items-baseline justify-between border-b border-[var(--border-soft)] px-4 py-2 text-[10px] uppercase tracking-[0.15em] text-[var(--text-muted)]">
         <span>
@@ -22,7 +22,7 @@ export function Panel({ number, title, meta, children, className = "" }: Props) 
         </span>
         {meta && <span className="opacity-70">{meta}</span>}
       </header>
-      <div className="p-4">{children}</div>
+      <div className="flex-1 p-4">{children}</div>
     </section>
   );
 }
