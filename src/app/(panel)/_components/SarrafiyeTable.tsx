@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
+import { Panel } from "./Panel";
 import { Sparkline } from "./Sparkline";
 import { fmt } from "@/lib/format";
 import { SARRAFIYE_SYMBOLS, type PriceRow } from "@/lib/types";
@@ -18,7 +19,7 @@ type Props = {
   history: Record<string, Tick[]>;
 };
 
-const HIST_KEEP = 90; // tutulacak max nokta (~90 dk)
+const HIST_KEEP = 90;
 
 export function SarrafiyeTable({ initial, history }: Props) {
   const [rows, setRows] = useState<Record<string, PriceRow>>(initial);
@@ -48,7 +49,7 @@ export function SarrafiyeTable({ initial, history }: Props) {
                   delete c[r.symbol];
                   return c;
                 });
-              }, 600);
+              }, 700);
             }
             return { ...prev, [r.symbol]: r };
           });
@@ -69,69 +70,84 @@ export function SarrafiyeTable({ initial, history }: Props) {
   }, []);
 
   return (
-    <section>
-      <div className="mb-3 flex items-baseline justify-between text-xs uppercase tracking-wider opacity-60">
-        <span>05 // SARRAFİYE</span>
-        <span>{SARRAFIYE_SYMBOLS.length} ÜRÜN · SON 60 DK</span>
-      </div>
-      <div className="border border-[#2A2A2A]">
-        <table className="w-full font-mono text-sm">
-          <thead className="text-[10px] uppercase tracking-wider opacity-50">
-            <tr className="border-b border-[#2A2A2A]">
-              <th className="px-4 py-2 text-left">Ürün</th>
-              <th className="px-4 py-2 text-right">Alış</th>
-              <th className="px-4 py-2 text-right">Satış</th>
-              <th className="px-4 py-2 text-right">Makas</th>
-              <th className="px-4 py-2 text-right">%</th>
-              <th className="px-4 py-2 text-right">Trend</th>
-            </tr>
-          </thead>
-          <tbody>
-            {SARRAFIYE_SYMBOLS.map((meta) => {
-              const r = rows[meta.symbol];
-              const trend = hist[meta.symbol] || [];
-              const spread = r ? r.ask - r.bid : null;
-              const spreadPct =
-                r && r.bid > 0 ? ((r.ask - r.bid) / r.bid) * 100 : null;
-              const flash = flashing[meta.symbol];
-              const rowBg =
-                flash === "up"
-                  ? "bg-[#7FB069]/15"
-                  : flash === "down"
-                    ? "bg-[#D17B7B]/15"
-                    : "";
+    <Panel
+      number="07"
+      title="SARRAFİYE"
+      meta={`${SARRAFIYE_SYMBOLS.length} ÜRÜN · CANLI`}
+    >
+      <table className="w-full font-mono text-[12px]">
+        <thead className="text-[9px] uppercase tracking-wider text-[var(--text-muted)]">
+          <tr className="border-b border-[var(--border-soft)]">
+            <th className="px-2 py-1.5 text-left">Ürün</th>
+            <th className="px-2 py-1.5 text-right">Alış</th>
+            <th className="px-2 py-1.5 text-right">Satış</th>
+            <th className="px-2 py-1.5 text-right">Makas</th>
+            <th className="px-2 py-1.5 text-right">%</th>
+            <th className="px-2 py-1.5 text-right">Trend 60 dk</th>
+          </tr>
+        </thead>
+        <tbody>
+          {SARRAFIYE_SYMBOLS.map((meta) => {
+            const r = rows[meta.symbol];
+            const trend = hist[meta.symbol] || [];
+            const spread = r ? r.ask - r.bid : null;
+            const spreadPct =
+              r && r.bid > 0 ? ((r.ask - r.bid) / r.bid) * 100 : null;
+            const flash = flashing[meta.symbol];
+            const open = trend[0]?.ask;
+            const pct = r && open ? ((r.ask - open) / open) * 100 : null;
+            const isUp = pct != null && pct >= 0;
+            const rowBg =
+              flash === "up"
+                ? "bg-[var(--accent-up)]/10"
+                : flash === "down"
+                  ? "bg-[var(--accent-down)]/10"
+                  : "";
 
-              return (
-                <tr
-                  key={meta.symbol}
-                  className={`border-b border-[#1F1F1F] transition-colors duration-500 ${rowBg}`}
-                >
-                  <td className="px-4 py-2 text-[12px] tracking-wider opacity-80">
+            return (
+              <tr
+                key={meta.symbol}
+                className={`border-b border-[var(--border-soft)] transition-colors duration-500 last:border-b-0 ${rowBg}`}
+              >
+                <td className="px-2 py-1.5">
+                  <div className="text-[11px] uppercase tracking-wider text-[var(--text)]">
                     {meta.label}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums">
-                    {fmt(r?.bid ?? null)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums font-bold">
-                    {fmt(r?.ask ?? null)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums opacity-60">
-                    {fmt(spread)}
-                  </td>
-                  <td className="px-4 py-2 text-right tabular-nums opacity-60">
-                    {spreadPct != null ? `${spreadPct.toFixed(2)}` : "—"}
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    <span className="inline-block">
-                      <Sparkline data={trend} />
-                    </span>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
+                  </div>
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-muted)]">
+                  {fmt(r?.bid ?? null)}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums font-bold text-[var(--text)]">
+                  {fmt(r?.ask ?? null)}
+                </td>
+                <td className="px-2 py-1.5 text-right tabular-nums text-[var(--text-muted)]">
+                  {fmt(spread)}
+                </td>
+                <td
+                  className={`px-2 py-1.5 text-right tabular-nums ${
+                    pct == null
+                      ? "text-[var(--text-muted)]"
+                      : isUp
+                        ? "text-[var(--accent-up)]"
+                        : "text-[var(--accent-down)]"
+                  }`}
+                >
+                  {pct == null
+                    ? spreadPct != null
+                      ? `${spreadPct.toFixed(2)}`
+                      : "—"
+                    : `${isUp ? "▲" : "▼"} ${Math.abs(pct).toFixed(2)}`}
+                </td>
+                <td className="px-2 py-1.5 text-right text-[var(--text-muted)]">
+                  <span className="inline-block">
+                    <Sparkline data={trend} width={90} height={18} />
+                  </span>
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </Panel>
   );
 }

@@ -39,7 +39,7 @@ export function Sparkline({ data, width = 80, height = 24 }: Props) {
 
   const first = values[0];
   const last = values[values.length - 1];
-  const color = last >= first ? "#7FB069" : "#D17B7B";
+  const color = last >= first ? "#5A7F4A" : "#B85450";
 
   return (
     <svg width={width} height={height} className="overflow-visible">
