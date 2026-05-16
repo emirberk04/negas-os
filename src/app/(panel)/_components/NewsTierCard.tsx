@@ -85,6 +85,21 @@ export function NewsTierCard({
           }, 4000);
         }
       )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "news",
+          filter: `tier=eq.${tier}`,
+        },
+        (payload) => {
+          const r = payload.new as NewsRow;
+          setNews((prev) =>
+            prev.map((p) => (p.id === r.id ? { ...p, ...r } : p))
+          );
+        }
+      )
       .subscribe();
     return () => {
       supabase.removeChannel(ch);
@@ -123,6 +138,14 @@ export function NewsTierCard({
           const isNew = newIds.has(n.id);
           const isEn = n.region === "GLOBAL";
           const display = n.title_tr || n.title_original;
+          const sentimentColor =
+            n.sentiment === "positive"
+              ? "text-[var(--accent-up)]"
+              : n.sentiment === "negative"
+                ? "text-[var(--accent-down)]"
+                : n.sentiment === null
+                  ? "text-[var(--text-faint)]"
+                  : "text-[var(--text-muted)]";
           return (
             <li
               key={n.id}
@@ -130,7 +153,9 @@ export function NewsTierCard({
                 isNew ? "bg-[var(--accent-warn)]/15" : ""
               }`}
             >
-              <span className={accentColor}>{isNew ? "●" : "○"}</span>
+              <span className={sentimentColor} title={n.sentiment || "—"}>
+                {isNew ? "●" : "●"}
+              </span>
               <span className="font-mono text-[9px] uppercase tracking-wider text-[var(--text-muted)]">
                 {n.source_code}
               </span>
