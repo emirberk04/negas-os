@@ -6,7 +6,7 @@ import { MainPricesCard } from "./_components/MainPricesCard";
 import { AlertsCard } from "./_components/AlertsCard";
 import { SarrafiyeTable } from "./_components/SarrafiyeTable";
 import { NewsCard } from "./_components/NewsCard";
-import { BriefingCard } from "./_components/BriefingCard";
+import { AyarConverter } from "./_components/AyarConverter";
 import {
   MAIN_SYMBOLS,
   SARRAFIYE_SYMBOLS,
@@ -80,7 +80,9 @@ export default async function PanelPage() {
           <SarrafiyeTable initial={sarrafiyeInitial} history={history} />
         </div>
         <div className="col-span-12 lg:col-span-4">
-          <BriefingCard />
+          <AyarConverter
+            initialGramPrice={mainInitial["GRAM_ALTIN"] ?? null}
+          />
         </div>
 
         {/* Alt — haber tam genişlik */}
