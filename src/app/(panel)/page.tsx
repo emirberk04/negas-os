@@ -127,7 +127,7 @@ export default async function PanelPage() {
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text)]">
       <AlertBanner />
       <TopBar />
-      <main className="grid grid-cols-12 items-start gap-3 p-3">
+      <main className="grid grid-cols-12 gap-3 p-3">
         {/* Üst sıra */}
         <div className="col-span-12 lg:col-span-3">
           <AtolyeCard />
@@ -140,23 +140,19 @@ export default async function PanelPage() {
           />
         </div>
 
-        {/* Ana fiyatlar */}
+        {/* Orta sıra — Ana fiyatlar + Alarm */}
         <div className="col-span-12 lg:col-span-8">
           <MainPricesCard initial={mainInitial} history={history} />
         </div>
-        <div className="col-span-12 lg:col-span-4">
+        <div className="col-span-12 lg:col-span-4 flex flex-col gap-3">
           <BriefingCard number="04" initial={briefing} />
-        </div>
-
-        {/* Sarrafiye — direkt altına */}
-        <div className="col-span-12 lg:col-span-8">
-          <SarrafiyeTable initial={sarrafiyeInitial} history={history} />
-        </div>
-        <div className="col-span-12 lg:col-span-4">
           <AlertsCard number="06" initial={alerts} />
         </div>
 
-        {/* Ayar çevirici */}
+        {/* Sarrafiye + Ayar çevirici */}
+        <div className="col-span-12 lg:col-span-8">
+          <SarrafiyeTable initial={sarrafiyeInitial} history={history} />
+        </div>
         <div className="col-span-12 lg:col-span-4">
           <AyarConverter
             initialGramPrice={mainInitial["GRAM_ALTIN"] ?? null}
