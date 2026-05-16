@@ -96,6 +96,75 @@ function safeJsonParse(text: string): unknown {
   return JSON.parse(stripped);
 }
 
+// ============================================================
+// Sabah Brifingi — günde 1 kez, son 24 saatin önemli haberleri
+// ============================================================
+
+const BRIEFING_SYSTEM = `Sen bir kuyumcu atölyesi için altın piyasası baş analistisin.
+Önündeki son 24 saatin önemli haberlerini okuyup, dükkan sahibi için TV ekranında görünecek SABAH BRİFİNGİ hazırla.
+
+KURALLAR:
+- Türkçe yaz, mono spaced düz metin (markdown yok, *bold* veya - liste yok)
+- 3 bölüm: DÜN, BUGÜN, YORUM
+- Toplam max 280 kelime
+- Sayı ve isimleri koru
+- "İşte!", "Şok!" gibi clickbait yok
+- 1-2 satır arası cümleler, fazla uzun olmasın
+
+ÇIKTI FORMATI (aynen bu başlıklar):
+
+DÜN NE OLDU
+[3 satır, her satır 1 cümle, en kritik olaylar]
+
+BUGÜN DİKKAT
+[2-3 satır, beklenen veri/açıklama/risk]
+
+KISA YORUM
+[1 cümle, müşteriye söylenebilecek sade dil]`;
+
+export type BriefingResult = {
+  content: string;
+  inputTokens: number;
+  outputTokens: number;
+};
+
+export async function generateBriefing(input: {
+  newsLines: string[]; // her satır: "[sentiment] başlık"
+  priceContext?: string;
+}): Promise<BriefingResult> {
+  const user = `SON 24 SAATİN ÖNEMLİ HABERLERİ:
+
+${input.newsLines.join("\n")}
+
+${input.priceContext ? `\nPİYASA DURUMU:\n${input.priceContext}\n` : ""}
+Yukarıdaki yapıda brifing yaz.`;
+
+  const msg = await client.messages.create({
+    model: HAIKU_MODEL,
+    max_tokens: 700,
+    system: [
+      {
+        type: "text",
+        text: BRIEFING_SYSTEM,
+        cache_control: { type: "ephemeral" },
+      },
+    ],
+    messages: [{ role: "user", content: user }],
+  });
+
+  const content = msg.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+
+  return {
+    content,
+    inputTokens: msg.usage.input_tokens,
+    outputTokens: msg.usage.output_tokens,
+  };
+}
+
 export async function enrichNews(input: {
   title: string;
   source: string;

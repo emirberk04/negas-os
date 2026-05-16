@@ -3,7 +3,7 @@ import { TopBar } from "./_components/TopBar";
 import { AtolyeCard } from "./_components/AtolyeCard";
 import { SessionCard } from "./_components/SessionCard";
 import { MainPricesCard } from "./_components/MainPricesCard";
-import { AlertsCard } from "./_components/AlertsCard";
+import { BriefingCard } from "./_components/BriefingCard";
 import { SarrafiyeTable } from "./_components/SarrafiyeTable";
 import { AyarConverter } from "./_components/AyarConverter";
 import { NewsTierCard } from "./_components/NewsTierCard";
@@ -41,6 +41,17 @@ async function fetchPrices(): Promise<Record<string, PriceRow>> {
   return map;
 }
 
+async function fetchBriefing() {
+  const sb = sbAnon();
+  const { data } = await sb
+    .from("briefings")
+    .select("id, date, content, news_count, created_at")
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return data ?? null;
+}
+
 async function fetchNewsByTier(): Promise<Record<string, NewsRow[]>> {
   const sb = sbAnon();
   const tiers = ["breaking", "analiz", "buyukresim"];
@@ -70,10 +81,11 @@ export default async function PanelPage() {
     ...MAIN_SYMBOLS.map((m) => m.symbol),
     ...SARRAFIYE_SYMBOLS.map((m) => m.symbol),
   ];
-  const [initial, history, news] = await Promise.all([
+  const [initial, history, news, briefing] = await Promise.all([
     fetchPrices(),
     fetchHistory(symbols, 60),
     fetchNewsByTier(),
+    fetchBriefing(),
   ]);
 
   const mainInitial = Object.fromEntries(
@@ -102,7 +114,7 @@ export default async function PanelPage() {
           <MainPricesCard initial={mainInitial} history={history} />
         </div>
         <div className="col-span-12 lg:col-span-4">
-          <AlertsCard />
+          <BriefingCard number="04" initial={briefing} />
         </div>
 
         {/* Sarrafiye + Ayar çevirici */}
