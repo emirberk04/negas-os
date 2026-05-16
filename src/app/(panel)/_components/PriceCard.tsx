@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { fmt } from "@/lib/format";
+import { fmt, fmtTime, ageSeconds } from "@/lib/format";
 import type { PriceRow, SymbolMeta } from "@/lib/types";
 
 type Props = {
@@ -12,21 +12,35 @@ type Props = {
 
 export function PriceCard({ index, meta, row }: Props) {
   const prevAskRef = useRef<number | null>(null);
-  const [flash, setFlash] = useState<"up" | "down" | null>(null);
+  const prevStampRef = useRef<string | null>(null);
+  const [flash, setFlash] = useState<"up" | "down" | "tick" | null>(null);
+  const [age, setAge] = useState<number>(0);
 
   useEffect(() => {
     if (!row) return;
-    const prev = prevAskRef.current;
-    if (prev != null && row.ask !== prev) {
-      setFlash(row.ask > prev ? "up" : "down");
-      const t = setTimeout(() => setFlash(null), 600);
-      return () => clearTimeout(t);
+    const prevAsk = prevAskRef.current;
+    const prevStamp = prevStampRef.current;
+    const isNewTick = prevStamp != null && prevStamp !== row.created_at;
+
+    if (prevAsk != null && row.ask !== prevAsk) {
+      setFlash(row.ask > prevAsk ? "up" : "down");
+    } else if (isNewTick) {
+      setFlash("tick");
     }
+
     prevAskRef.current = row.ask;
+    prevStampRef.current = row.created_at;
+
+    const t = setTimeout(() => setFlash(null), 600);
+    return () => clearTimeout(t);
   }, [row]);
 
   useEffect(() => {
-    if (row) prevAskRef.current = row.ask;
+    if (!row) return;
+    const tick = () => setAge(ageSeconds(row.created_at));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, [row]);
 
   const spread = row ? row.ask - row.bid : null;
@@ -37,7 +51,11 @@ export function PriceCard({ index, meta, row }: Props) {
       ? "bg-[#7FB069]/15"
       : flash === "down"
         ? "bg-[#D17B7B]/15"
-        : "bg-[#141414]";
+        : flash === "tick"
+          ? "bg-[#6B9FD4]/8"
+          : "bg-[#141414]";
+
+  const stale = age > 90;
 
   return (
     <div
@@ -47,15 +65,11 @@ export function PriceCard({ index, meta, row }: Props) {
         <span>
           {String(index).padStart(2, "0")} // {meta.label}
         </span>
-        {flash && (
-          <span
-            className={
-              flash === "up" ? "text-[#7FB069]" : "text-[#D17B7B]"
-            }
-          >
-            {flash === "up" ? "▲" : "▼"}
-          </span>
-        )}
+        <span className="flex items-center gap-2">
+          {flash === "up" && <span className="text-[#7FB069]">▲</span>}
+          {flash === "down" && <span className="text-[#D17B7B]">▼</span>}
+          {stale && <span className="text-[#D17B7B]">● STALE</span>}
+        </span>
       </div>
 
       <div className="mt-6 grid grid-cols-2 gap-x-6">
@@ -80,7 +94,7 @@ export function PriceCard({ index, meta, row }: Props) {
           Makas {fmt(spread)} {meta.unit}
           {spreadPct != null && ` · ${spreadPct.toFixed(2)}%`}
         </span>
-        <span>{row?.source ?? "—"}</span>
+        <span>{row ? `${fmtTime(row.created_at)} · ${age}s` : "—"}</span>
       </div>
     </div>
   );
