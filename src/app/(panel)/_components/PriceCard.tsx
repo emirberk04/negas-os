@@ -48,11 +48,11 @@ export function PriceCard({ index, meta, row }: Props) {
 
   const flashBg =
     flash === "up"
-      ? "bg-[#7FB069]/15"
+      ? "bg-[#7FB069]/20"
       : flash === "down"
-        ? "bg-[#D17B7B]/15"
+        ? "bg-[#D17B7B]/20"
         : flash === "tick"
-          ? "bg-[#6B9FD4]/8"
+          ? "bg-[#6B9FD4]/15"
           : "bg-[#141414]";
 
   const stale = age > 90;
