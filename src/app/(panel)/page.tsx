@@ -7,6 +7,8 @@ import { BriefingCard } from "./_components/BriefingCard";
 import { SarrafiyeTable } from "./_components/SarrafiyeTable";
 import { AyarConverter } from "./_components/AyarConverter";
 import { NewsTierCard } from "./_components/NewsTierCard";
+import { AlertsCard } from "./_components/AlertsCard";
+import { AlertBanner } from "./_components/AlertBanner";
 import {
   MAIN_SYMBOLS,
   SARRAFIYE_SYMBOLS,
@@ -42,6 +44,22 @@ async function fetchPrices(): Promise<Record<string, PriceRow>> {
   const map: Record<string, PriceRow> = {};
   for (const r of data ?? []) map[r.symbol] = r as PriceRow;
   return map;
+}
+
+async function fetchAlerts() {
+  const sb = sbAnon();
+  const { data } = await sb
+    .from("alerts")
+    .select("id, symbol, condition, threshold, label, enabled")
+    .order("symbol", { ascending: true });
+  return (data ?? []) as Array<{
+    id: number;
+    symbol: string;
+    condition: "above" | "below";
+    threshold: number;
+    label: string | null;
+    enabled: boolean;
+  }>;
 }
 
 async function fetchBriefing() {
@@ -84,7 +102,7 @@ export default async function PanelPage() {
     ...MAIN_SYMBOLS.map((m) => m.symbol),
     ...SARRAFIYE_SYMBOLS.map((m) => m.symbol),
   ];
-  const [initial, history, news, briefing, weather, prayerSet] =
+  const [initial, history, news, briefing, weather, prayerSet, alerts] =
     await Promise.all([
       fetchPrices(),
       fetchHistory(symbols, 60),
@@ -92,6 +110,7 @@ export default async function PanelPage() {
       fetchBriefing(),
       fetchKonyaWeather(),
       fetchKonyaPrayerTimes(),
+      fetchAlerts(),
     ]);
   const bayram = getBayramCountdown();
 
@@ -106,6 +125,7 @@ export default async function PanelPage() {
 
   return (
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text)]">
+      <AlertBanner />
       <TopBar />
       <main className="grid grid-cols-12 gap-3 p-3">
         {/* Üst sıra */}
@@ -124,8 +144,9 @@ export default async function PanelPage() {
         <div className="col-span-12 lg:col-span-8">
           <MainPricesCard initial={mainInitial} history={history} />
         </div>
-        <div className="col-span-12 lg:col-span-4">
+        <div className="col-span-12 lg:col-span-4 flex flex-col gap-3">
           <BriefingCard number="04" initial={briefing} />
+          <AlertsCard number="06" initial={alerts} />
         </div>
 
         {/* Sarrafiye + Ayar çevirici */}

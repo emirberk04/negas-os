@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { fetchCanlidoviz } from "@/lib/sources/canlidoviz";
 import { fetchMynetKapaliCarsi } from "@/lib/sources/mynet";
 import { supabaseAdmin } from "@/lib/supabase";
+import { checkAlerts } from "@/lib/alerts";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -74,6 +75,18 @@ export async function GET(req: Request) {
     );
   }
 
+  // Alarmları kontrol et (yeni fiyatlara göre)
+  let alertReport: { checked: number; triggered: number } = {
+    checked: 0,
+    triggered: 0,
+  };
+  try {
+    alertReport = await checkAlerts(supabaseAdmin, rows);
+  } catch (e) {
+    // alarm hata verirse de cron başarılı sayılsın
+    errors.push(`alerts: ${e instanceof Error ? e.message : String(e)}`);
+  }
+
   return NextResponse.json({
     ok: true,
     inserted: rows.length,
@@ -82,6 +95,7 @@ export async function GET(req: Request) {
       acc[r.source] = (acc[r.source] || 0) + 1;
       return acc;
     }, {}),
+    alerts: alertReport,
     errors: errors.length ? errors : undefined,
   });
 }
