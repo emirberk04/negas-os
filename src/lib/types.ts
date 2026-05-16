@@ -30,6 +30,7 @@ export type NewsRow = {
   link: string;
   published_at: string | null;
   sentiment: string | null;
+  relevance: number | null;
   created_at: string;
 };
 

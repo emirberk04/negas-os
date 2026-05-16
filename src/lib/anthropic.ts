@@ -34,22 +34,45 @@ sentiment (altın):
 
 SADECE JSON döndür.`;
 
-// "Mutlaka altınla alakalı" sayılan güçlü sinyaller — bunlardan biri yoksa AI'ya gönderme
-const STRONG_SIGNALS = [
-  "altın", "altin", "ons", "gram altın", "çeyrek", "cumhuriyet", "ata altın",
-  "reşat", "has altın", "gümüş", "gumus", "platin", "külçe", "ayar", "bilezik",
-  "fed", "fomc", "faiz", "enflasyon", "tüfe", "üfe", "tcmb", "merkez banka",
-  "dolar", "usd", "euro", "eur", "döviz", "kur", "rezerv",
-  "şimşek", "karahan", "powell", "lagarde", "trump", "erdoğan",
-  "iran", "israil", "rusya", "ukrayna", "çin", "tarife", "savaş", "ateşkes",
-  "petrol", "brent", "opec",
-  "gold", "silver", "precious", "bullion", "inflation", "rate cut", "rate hike",
-  "treasury", "dxy",
-];
+// AI'ya göndermeden önce kullanılan güçlü sinyal regex'i (word-boundary korumalı)
+const STRONG_SIGNAL_REGEX = new RegExp(
+  [
+    "alt[ıi]n", "ons\\b", "g[üu]m[üu][şs]", "platin", "k[üu]l[çc]e",
+    "ayar\\b", "bilezik", "[çc]eyrek", "cumhuriyet", "re[şs]at",
+    "ata alt[ıi]n", "has alt[ıi]n",
+    "fed\\b", "fomc", "faiz", "enflasyon", "t[üu]fe", "[üu]fe", "tcmb",
+    "merkez banka", "para politika",
+    "dolar", "usd\\b", "euro\\b", "eur\\b", "d[öo]viz", "kur\\b",
+    "rezerv", "swap", "cari a[çc][ıi]k", "b[üu]t[çc]e",
+    "[şs]im[şs]ek", "karahan", "erdo[ğg]an", "powell", "lagarde",
+    "trump", "putin",
+    "iran\\b", "[ıi]srail", "rusya", "ukrayna", "[çc]in\\b",
+    "tarife", "sava[şs]", "ate[şs]kes", "yapt[ıi]r[ıi]m",
+    "orta do[ğg]u", "petrol", "brent", "wti\\b", "opec",
+    "borsa\\b", "bist", "tahvil", "cds\\b",
+    "gold\\b", "silver\\b", "precious", "bullion", "inflation",
+    "treasury", "dxy\\b", "rate cut", "rate hike", "yield",
+  ].join("|"),
+  "i"
+);
+
+const NOISE_REGEX = new RegExp(
+  [
+    "voleybol", "basketbol", "futbol", "tenis", "g[üu]re[şs]",
+    "fiba", "uefa", "fifa", "nba", "ma[çc]\\b", "gol\\b", "tak[ıi]m\\b",
+    "lig\\b", "transfer", "fener", "be[şs]ikta[şs]", "trabzon",
+    "europe cup", "champions", "[şs]ampiyona", "olimp",
+    "magazin", "dizi\\b", "sanat[çc]", "konser", "[şs]ark[ıi]c[ıi]",
+    "sinema", "oyuncu", "[üu]nl[üu]\\b", "bo[şs]an", "yang[ıi]n",
+    "kaza\\b", "cinayet", "kavga", "uyu[şs]turucu",
+    "kurye", "src belges",
+  ].join("|"),
+  "i"
+);
 
 export function hasStrongSignal(title: string): boolean {
-  const lower = title.toLowerCase();
-  return STRONG_SIGNALS.some((kw) => lower.includes(kw));
+  if (NOISE_REGEX.test(title)) return false;
+  return STRONG_SIGNAL_REGEX.test(title);
 }
 
 function buildUserPrompt(

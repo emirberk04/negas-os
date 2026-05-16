@@ -15,10 +15,11 @@ type Props = {
   number: string;
   title: string;
   tier: "breaking" | "analiz" | "buyukresim";
-  marker: string; // ●  veya 🔴 vb
-  accent: "down" | "warn" | "up"; // panel renk vurgusu
+  marker: string;
+  accent: "down" | "warn" | "up";
   initial: NewsRow[];
   max?: number;
+  minRelevance?: number;
 };
 
 function fmtTime(iso: string | null) {
@@ -50,6 +51,7 @@ export function NewsTierCard({
   accent,
   initial,
   max = 8,
+  minRelevance = 4,
 }: Props) {
   const [news, setNews] = useState<NewsRow[]>(initial);
   const [newIds, setNewIds] = useState<Set<number>>(new Set());
@@ -113,8 +115,13 @@ export function NewsTierCard({
         ? "text-[var(--accent-warn)]"
         : "text-[var(--accent-up)]";
 
+  // AI henüz işlememişse (relevance=null) göster; işledikten sonra min eşiğin altındakileri gizle
+  const filtered = news.filter(
+    (n) => n.relevance == null || n.relevance >= minRelevance
+  );
+
   const sourceCodes = Array.from(
-    new Set(news.map((n) => n.source_code))
+    new Set(filtered.map((n) => n.source_code))
   ).slice(0, 4);
 
   return (
@@ -129,12 +136,12 @@ export function NewsTierCard({
       meta={sourceCodes.join(" · ") || "—"}
     >
       <ul className="space-y-1.5 text-[11px] leading-snug">
-        {news.length === 0 && (
+        {filtered.length === 0 && (
           <li className="text-[var(--text-muted)] opacity-70">
             Henüz haber yok — ilk cron beklemede.
           </li>
         )}
-        {news.slice(0, max).map((n) => {
+        {filtered.slice(0, max).map((n) => {
           const isNew = newIds.has(n.id);
           const isEn = n.region === "GLOBAL";
           const display = n.title_tr || n.title_original;

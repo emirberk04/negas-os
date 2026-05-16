@@ -54,11 +54,11 @@ async function fetchNewsByTier(): Promise<Record<string, NewsRow[]>> {
       const { data } = await sb
         .from("news")
         .select(
-          "id, source_code, source_name, tier, region, title_original, title_tr, link, published_at, sentiment, created_at"
+          "id, source_code, source_name, tier, region, title_original, title_tr, link, published_at, sentiment, relevance, created_at"
         )
         .eq("tier", t)
         .order("published_at", { ascending: false, nullsFirst: false })
-        .limit(8);
+        .limit(20);
       out[t] = (data ?? []) as NewsRow[];
     })
   );
