@@ -290,136 +290,392 @@ Basit şifre korumalı sayfa (NextAuth veya simple cookie):
 
 ---
 
-### **FAZ 4 — Haber Akışı (RSS)** ⏱️ ~3 saat
+### **FAZ 4 — Haber Akışı (RSS)** ⏱️ ~4 saat
 
-**Hedef:** Altın/ekonomi haberleri canlı kayıyor.
+**Hedef:** Altını etkileyebilecek son dakika haberleri canlı kayıyor — hem Türkiye, hem dünya. Müşteri ekranı görünce "vay be, Bloomberg gibi" desin.
 
-#### 4.1 — Supabase tablosu
+#### 4.0 — Haber kaynak felsefesi
+
+**Önce şunu net koy:** Haberler 3 katmana ayrılır, hepsi farklı amaca hizmet eder:
+
+1. **🔴 BREAKING (anlık, ham veri)** — "Karahan: Faiz koridoru..." tipi tek satırlık piyasa tweet'leri. Bloomberg HT'nin son dakika sayfası bu tür haberle dolu. Müşteri içeri girince akan şerit gibi gözükmeli.
+2. **🟡 ANALİZ (gün içi)** — "Ons altın 4.700 direncini kırdı, sebebi şu" gibi yorum/açıklama haberleri. Kitco News, Investing emtia, Bigpara altın.
+3. **🟢 BÜYÜK RESİM (günde 1-2 kez)** — "Pierre Lassonde: Altın $17.250'ye gidecek" tipi makro analiz. Reuters, Bloomberg.com, World Gold Council.
+
+Her katman farklı sıklıkta ve farklı görsel ağırlıkta gösterilir.
+
+#### 4.1 — TÜRKİYE kaynakları (öncelik sırasıyla)
+
+| Kaynak | RSS URL | Tier | Sıklık | Neden |
+|---|---|---|---|---|
+| **Bloomberg HT** | `https://www.bloomberght.com/rss` | 🔴 BREAKING | 2 dk | TR'de en hızlı, son dakika piyasa tweet'leri stili. Karahan/Şimşek açıklamaları **canlı** düşer. |
+| **Bigpara Altın** | `https://bigpara.hurriyet.com.tr/rss/` | 🟡 ANALİZ | 5 dk | Hürriyet bünyesinde, altın özel kategorisi var, analiz ağırlıklı |
+| **Investing.com TR — Emtia** | `https://tr.investing.com/rss/commodities.rss` | 🟡 ANALİZ | 5 dk | Altın/gümüş/petrol global yorum, profesyonel kaynak |
+| **Investing.com TR — Döviz** | `https://tr.investing.com/rss/forex.rss` | 🟡 ANALİZ | 5 dk | USD/TRY hareketleri altını direkt etkiler |
+| **Foreks** | `https://www.foreks.com/rss/` | 🔴 BREAKING | 5 dk | Profesyonel trader kaynağı, özet veri |
+| **Sabah Finans-Altın** | `https://www.sabah.com.tr/rss/finansaltin-haberleri.xml` | 🟡 ANALİZ | 10 dk | Halka açık, altın özel kategori, mainstream dil |
+| **Döviz.com** | `https://www.doviz.com/news/rss` | 🟡 ANALİZ | 10 dk | Döviz ve altın spesifik |
+| **Ekonomi Gazetesi** | `https://www.ekonomigazetesi.com/rss.xml` | 🟢 BÜYÜK RESİM | 30 dk | Kurumsal/derin analiz |
+| **AA Ekonomi** | `https://www.aa.com.tr/tr/rss/default?cat=ekonomi` | 🟢 BÜYÜK RESİM | 30 dk | Anadolu Ajansı — resmi kaynak, TCMB açıklamaları |
+| **CNN Türk Finans** | `https://www.cnnturk.com/feed/rss/news` | 🟢 BÜYÜK RESİM | 30 dk | Backup, mainstream |
+
+#### 4.2 — DÜNYA kaynakları (öncelik sırasıyla)
+
+| Kaynak | RSS URL | Tier | Sıklık | Neden |
+|---|---|---|---|---|
+| **Kitco News** | `https://www.kitco.com/rss/KitcoNews.xml` | 🔴 BREAKING | 5 dk | **Dünyada altın haberinde 1 numara.** "Gold sheds $47 as rate-hike fears..." tipi. |
+| **Reuters Commodities** | `https://www.reutersagency.com/feed/?best-topics=commodities` | 🟡 ANALİZ | 10 dk | En güvenilir global kaynak, hızlı |
+| **Bloomberg Markets** | (RSS yok, scraping veya Bloomberg API gerekir) | 🟢 BÜYÜK RESİM | 30 dk | İsteğe bağlı — bedava değil |
+| **Mining.com Gold** | `https://www.mining.com/tag/gold/feed/` | 🟢 BÜYÜK RESİM | 30 dk | Madencilik tarafı, üretim haberleri |
+| **World Gold Council** | `https://www.gold.org/feeds/news` | 🟢 BÜYÜK RESİM | 60 dk | Resmi kaynak, talep/arz raporları |
+| **Trading Economics Gold** | `https://tradingeconomics.com/commodity/gold` (scraping) | 🟡 ANALİZ | 15 dk | Veri + kısa açıklama |
+| **FXStreet Gold** | `https://www.fxstreet.com/rss/news` | 🟡 ANALİZ | 10 dk | Teknik analiz ağırlıklı |
+
+#### 4.3 — Supabase tablosu
 
 ```sql
 CREATE TABLE news (
   id BIGSERIAL PRIMARY KEY,
-  source TEXT,           -- 'SBH', 'SZC', 'INV', 'BHT'
-  title TEXT NOT NULL,
-  link TEXT UNIQUE,      -- duplicate engelleme
+  source_code TEXT NOT NULL,      -- 'BHT', 'KTC', 'BGP', 'INV-C', 'AA'
+  source_name TEXT,                -- 'Bloomberg HT', 'Kitco News'
+  tier TEXT NOT NULL,              -- 'breaking', 'analiz', 'buyukresim'
+  region TEXT NOT NULL,            -- 'TR', 'GLOBAL'
+  
+  title_original TEXT NOT NULL,    -- orijinal başlık (TR veya EN)
+  title_tr TEXT,                   -- AI çevirisi (EN ise) + temizlenmiş TR
+  summary_short TEXT,              -- AI özet, max 80 karakter (TV için)
+  summary_medium TEXT,             -- AI özet, max 200 karakter (tooltip için)
+  
+  link TEXT UNIQUE NOT NULL,       -- duplicate engelleme
   published_at TIMESTAMPTZ,
-  category TEXT,         -- 'altin', 'ekonomi', 'global'
-  sentiment TEXT,        -- Faz 5'te dolacak: 'positive', 'negative', 'neutral'
-  relevance INT,         -- 1-10, AI etiketi
-  summary TEXT,          -- AI özet
+  
+  -- AI etiketleri (Faz 5'te dolacak)
+  category TEXT,                   -- 'altin', 'fed', 'jeopolitik', 'tcmb', 'dolar'
+  sentiment TEXT,                  -- 'positive', 'negative', 'neutral'
+  relevance INT,                   -- 1-10, altına direkt etki
+  impact_assets TEXT[],            -- ['GRAM_ALTIN', 'ONS', 'USD_TRY']
+  
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+CREATE INDEX idx_news_time ON news(published_at DESC);
+CREATE INDEX idx_news_tier ON news(tier, published_at DESC);
 ```
 
-#### 4.2 — Cron: `/api/cron/news` (her 5 dk)
+#### 4.4 — Cron job stratejisi
 
-RSS kaynakları:
-- `https://www.sabah.com.tr/rss/finansaltin-haberleri.xml` (en kritik, altın özel)
-- `https://www.sozcu.com.tr/feeds-rss-category-ekonomi`
-- `https://tr.investing.com/rss/news_25.rss` (emtia)
-- Bloomberg HT RSS
-- Kitco News RSS (dünya altın haberleri, İngilizce)
+Vercel Hobby cron limiti yüzünden tek endpoint multi-task:
 
 ```typescript
-import Parser from 'rss-parser';
+// app/api/cron/news/route.ts
+export async function GET(req: Request) {
+  // Tier'a göre hangi kaynakları çekeceğini belirle
+  const minute = new Date().getMinutes();
+  
+  const sources: SourceConfig[] = [];
+  
+  // BREAKING — her 2 dakikada
+  if (minute % 2 === 0) {
+    sources.push(BHT, KITCO, FOREKS);
+  }
+  
+  // ANALİZ — her 5 dakikada
+  if (minute % 5 === 0) {
+    sources.push(BIGPARA, INVESTING_COMMODITIES, INVESTING_FOREX, SABAH_GOLD, REUTERS);
+  }
+  
+  // BÜYÜK RESİM — her 30 dakikada
+  if (minute % 30 === 0) {
+    sources.push(AA, CNN, MINING, GOLD_ORG);
+  }
+  
+  for (const src of sources) {
+    const feed = await parser.parseURL(src.url);
+    for (const item of feed.items) {
+      // Sadece altın/ekonomi alakalısı al — keyword filter
+      if (!isRelevant(item.title)) continue;
+      
+      // Duplicate check by link
+      await supabase.from('news').upsert({ ... }, { onConflict: 'link' });
+    }
+  }
+}
+```
 
-const SOURCES = [
-  { code: 'SBH', url: 'https://www.sabah.com.tr/rss/finansaltin-haberleri.xml' },
-  // ...
+`vercel.json`:
+```json
+{
+  "crons": [
+    { "path": "/api/cron/news", "schedule": "*/2 * * * *" }
+  ]
+}
+```
+
+#### 4.5 — Keyword filtreleme (gürültü azaltma)
+
+Bloomberg HT'nin RSS'i her şeyi atıyor (spor, magazin bile geliyor). Sadece altınla ilgili olanları al:
+
+```typescript
+const RELEVANT_KEYWORDS_TR = [
+  // Doğrudan
+  'altın', 'gram altın', 'çeyrek', 'cumhuriyet', 'ata', 'ons', 'kıymetli maden',
+  'gümüş', 'platin', 'külçe',
+  // Etkileyici makro
+  'fed', 'faiz', 'enflasyon', 'tüfe', 'üfe', 'tcmb', 'merkez bankası',
+  'dolar', 'usd', 'euro', 'eur', 'türk lirası', 'döviz', 'kur',
+  'şimşek', 'karahan', 'erdoğan', 'powell',
+  // Jeopolitik
+  'iran', 'israil', 'orta doğu', 'rusya', 'ukrayna', 'çin', 'tarife',
+  'savaş', 'ateşkes', 'yaptırım',
+  // Piyasalar
+  'borsa', 'bist', 'tahvil', 'cds', 'petrol', 'brent',
 ];
 
-// Her kaynağı sırayla çek, link unique ise insert.
+const RELEVANT_KEYWORDS_EN = [
+  'gold', 'silver', 'precious metals', 'bullion', 'ounce',
+  'fed', 'fomc', 'inflation', 'cpi', 'ppi', 'rate cut', 'rate hike',
+  'dollar', 'dxy', 'treasury', 'yield',
+  'iran', 'israel', 'middle east', 'russia', 'ukraine', 'china', 'tariff',
+  'oil', 'brent', 'wti',
+];
+
+function isRelevant(title: string): boolean {
+  const lower = title.toLowerCase();
+  return [...RELEVANT_KEYWORDS_TR, ...RELEVANT_KEYWORDS_EN]
+    .some(kw => lower.includes(kw));
+}
 ```
 
-#### 4.3 — Frontend: Haber akışı
+> ⚠️ Bu liste başlangıç. İlk hafta panelde gereksiz haberler çıkarsa keyword'leri daraltırsın, eksik kalanlar olursa genişletirsin. Adaptive.
 
-TV layout'unda alt bölge:
+#### 4.6 — Frontend: 3 katmanlı haber bölgesi
+
+Burhan OS panelinde tek bir haber akışı vardı (alt taraf). Bizimkinde **3 ayrı kart**:
 
 ```
-07 // HABER AKIŞI                          SBH · SZC · INV
-─────────────────────────────────────────────────────────
-SBH  14:32  Gram altın yeni rekor: 6.660 TL          ALT
-SZC  14:18  Fed faiz kararı öncesi piyasalar...      EKO
-INV  13:55  ONS altın 4.700 direncini kırdı          GLB
-BHT  13:40  TCMB rezervleri açıkladı                 EKO
-SBH  12:21  Çeyrek altın bayram öncesi hareketleniyor ALT
-─────────────────────────────────────────────────────────
+┌────────────────────────────────────────────────────────────┐
+│ 07 // 🔴 SON DAKİKA                          BHT · KTC · FRX │
+├────────────────────────────────────────────────────────────┤
+│ ● BHT 14:32 KARAHAN: FAİZ KORİDORUNDA DEĞİŞİKLİK YOK       │
+│ ● KTC 14:31 Gold sheds $47 as rate-hike fears compound...  │
+│ ○ FRX 14:28 Brent petrol %1.3 yükseldi, $100.7              │
+│ ○ BHT 14:21 TCMB: Rezervler nisanda 165 milyar dolara çıktı│
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│ 08 // 🟡 PİYASA ANALİZ                    INV · BGP · REU │
+├────────────────────────────────────────────────────────────┤
+│ INV 13:55  ONS altın 4.700 direncini kırdı, hedef 4.800   │
+│ BGP 13:30  Gram altın bayram öncesi rekor: 6.660 TL       │
+│ REU 13:12  India tightens gold import after rupee slide    │
+└────────────────────────────────────────────────────────────┘
+
+┌────────────────────────────────────────────────────────────┐
+│ 09 // 🟢 BÜYÜK RESİM                              AA · WGC │
+├────────────────────────────────────────────────────────────┤
+│ AA  09:00  Şimşek: 2026 enflasyon hedefi güncellendi      │
+│ WGC 08:30  Q1 talep raporu — merkez bankaları 290t aldı   │
+└────────────────────────────────────────────────────────────┘
 ```
 
-Her 30 saniyede otomatik scroll, en yeni en üstte.
+**Görsel detaylar:**
+- Son dakika kartı: yeni haber gelince **kırmızı flash + ses (opsiyonel)**
+- Başlıklar **TÜMÜ BÜYÜK** (Bloomberg HT tarzı), monospace
+- İngilizce haberler küçük "EN" rozetiyle, başlık altında Türkçe özet
+- Hover/tap: tooltip ile uzun özet açılır
+- Kaynak kodu rozetli (BHT, KTC, BGP — 3 harfli)
+- Zaman damgası HER haberde, **"şimdi", "5 dk önce"** değil — gerçek saat (`14:32`)
 
-#### Çıktı
-- 5 kaynaktan canlı haber akışı.
-- Veriler Supabase'de saklanıyor.
+#### Çıktı (Faz 4 sonunda)
+- 10+ kaynaktan haber akışı.
+- Kategori bazlı 3 farklı kart.
+- Keyword filtreyle gürültüsüz.
+- AI özet henüz yok — başlıklar olduğu gibi geliyor.
 
 ---
 
-### **FAZ 5 — AI: Sabah Brifingi + Sinyal Etiketleri** ⏱️ ~4 saat
+### **FAZ 5 — AI: Türkçeleştirme + Kısa Özet + Sentiment** ⏱️ ~5 saat
 
-**Hedef:** Claude API ile haberleri zekileştir.
+**Hedef:** TV'deki haberler **tek satırlık temiz Türkçe özet** olarak görünsün. İngilizce Kitco haberi de Türkçe akacak. Her haberin altına yeşil/kırmızı sinyal düşsün.
 
-> Bu faz Claude API kullanıyor. Aylık tahmini maliyet: ~50-150 TL. İstemezsen atla.
+> Bu fazda Claude API kullanıyoruz. **Anthropic Claude Haiku** modeli — en ucuz, bu görev için fazlasıyla yeter. Aylık tahmini maliyet: **~80-150 TL** (gerçekçi). İstemezsen atla, Faz 4 başlıkları olduğu gibi göstermeye devam eder.
 
-#### 5.1 — Cron: `/api/cron/digest` (sabah 08:00)
+#### 5.0 — Neden gerekli?
 
-```typescript
-// Son 24 saatin haberlerini çek
-// Claude'a yedir:
-const prompt = `
-Bugün altın piyasasını etkileyebilecek son 24 saatin haberleri:
+Ham RSS başlıkları üç sorunlu:
 
-${newsItems.map(n => `- [${n.source}] ${n.title}`).join('\n')}
+1. **Çok uzun.** TV'de tek satır 60-80 karakter sığar, ama RSS başlıkları 120+ karakter geliyor.
+2. **Karışık dilli.** Kitco İngilizce, Bigpara Türkçe — uniform değil.
+3. **Clickbait/uzatma var.** "Gold sheds $47 as rate-hike fears and a thin Trump-Xi statement compound the sell-off" → 90 karakter → TV'de kesilir. **AI özeti: "Ons altın $47 düştü, Fed faiz endişesi"** → 38 karakter, anında okunur.
 
-Son 24 saatte gram altın: ${priceChange}
-Ons altın: ${onsChange}
-USD/TRY: ${usdChange}
+#### 5.1 — Akış: Her yeni haber → AI pipeline
 
-Aşağıdaki yapıda Türkçe bir kuyumcu sabah brifingi yaz:
-
-**DÜN NE OLDU**
-[2-3 cümle, ana hareketler]
-
-**BUGÜN DİKKAT**
-[2-3 cümle, beklenen olaylar]
-
-**KISA YORUM**
-[1 cümle, sade dil, müşteriye anlatılabilecek seviyede]
-`;
+```
+RSS gelir
+    ↓
+isRelevant() filtre ← keyword kontrolü
+    ↓
+Supabase'e raw insert (title_original)
+    ↓
+[Background queue] Claude Haiku API çağrısı
+    ↓
+JSON döner: {
+  title_tr: "...",
+  summary_short: "...",
+  summary_medium: "...",
+  category: "altin",
+  sentiment: "negative",
+  relevance: 8,
+  impact_assets: ["ONS", "GRAM_ALTIN"]
+}
+    ↓
+Supabase update
+    ↓
+Realtime push → TV ekranı güncellenir
 ```
 
-Sonucu `daily_briefings` tablosuna yaz, TV'de "08 // BUGÜN'ÜN BRİFİNGİ" kartında göster.
+#### 5.2 — Tek prompt — her şey aynı çağrıda
 
-#### 5.2 — Haber sentiment etiketleme
-
-Her yeni haber geldiğinde (Faz 4'teki cron'a ekle):
+Maliyet için her haber için **tek bir Haiku çağrısı** yap, ondan tüm metadatayı çek:
 
 ```typescript
-// Batch halinde, her 5 dk'da yeni haberleri Claude'a yedir
-const prompt = `Aşağıdaki haberin altın fiyatına etkisini değerlendir:
-Başlık: "${title}"
-Cevap formatı: JSON
+const SYSTEM_PROMPT = `Sen bir kuyumcu atölyesi için çalışan altın piyasası haber editörüsün.
+Görevin: Verilen ham haber başlığını TV ekranı için optimize etmek.
+
+KURALLAR:
+- Türkçe yaz (İngilizce gelirse çevir)
+- Tek satır, max 60 karakter (TV'de kesilmesin)
+- Yalın, yorum katma, başlık tarzında
+- Sayı varsa koru ($47, %2.3 gibi)
+- Kuruluş isimlerini kısalt: Federal Reserve → Fed, Türkiye Cumhuriyet Merkez Bankası → TCMB
+- Clickbait kelimeleri sil: "İşte!", "Şok!", "Müthiş!", "Son dakika:"
+
+ÇIKTI: SADECE geçerli JSON, başka metin yok.`;
+
+const userPrompt = `HABER:
+Başlık: "${news.title_original}"
+Kaynak: ${news.source_name}
+Tarih: ${news.published_at}
+
+Çıktı formatı:
 {
-  "sentiment": "positive|negative|neutral",
-  "relevance": 1-10,
-  "summary": "tek cümle Türkçe özet"
+  "title_tr": "Türkçe temiz başlık, max 60 karakter",
+  "summary_short": "Aynı başlık ama 40 karakteri geçmesin (TV ticker için)",
+  "summary_medium": "1-2 cümle özet, max 200 karakter (tooltip için)",
+  "category": "altin | fed | tcmb | dolar | jeopolitik | enflasyon | diger",
+  "sentiment": "positive | negative | neutral",
+  "relevance": 1-10 (altın fiyatına direkt etki, 10 = çok etkili),
+  "impact_assets": ["ONS"|"GRAM_ALTIN"|"USD_TRY"|"EUR_TRY"]
 }`;
 ```
 
-Frontend'te haber satırının yanında renkli nokta:
-- 🟢 positive (altın yükseltici)
-- 🔴 negative (altın düşürücü)
-- ⚪ neutral
+> **sentiment ne demek?** Pozitif = altın yükseltici (Fed faiz indirimi, jeopolitik gerilim). Negatif = altın düşürücü (enflasyon sertleşmesi, faiz artırımı). Neutral = etkisi belirsiz.
 
-#### 5.3 — Maliyet kontrolü
+#### 5.3 — Maliyet hesabı (gerçekçi)
 
-- Günlük brifing: 1 çağrı × 30 gün ≈ 30 çağrı/ay
-- Haber etiketi: ~50 haber/gün × 30 ≈ 1500 çağrı/ay
-- Claude Haiku kullan (en ucuz model, bu görev için yeter)
-- Tahmini: **~3-5$/ay**
+- Ortalama haber: 80 input token, 150 output token
+- Haiku fiyatı (2026 itibariyle): ~$0.25 / 1M input, $1.25 / 1M output
+- Tek haber maliyeti: ~$0.0002 = ~0.007 TL
+- Günde ~150-200 yeni haber × 30 gün = **~6000 çağrı/ay**
+- **Aylık: $1.20 ≈ 45 TL**
 
-#### Çıktı
-- Sabah TV'de günün brifingi görünüyor.
-- Her haber renkli sentiment etiketli.
+Sabah brifingi (bkz 5.5) ekleyince yaklaşık **80-100 TL/ay** toplam. Çok rahat bir bütçe.
+
+> ⚠️ Maliyet kontrolü için **rate limit + cache** koy:
+> - Aynı link 24 saat içinde tekrar gelirse skip
+> - Günlük max 500 Claude çağrısı sınırı (hata olursa sustur, alarmda söyle)
+> - `AI_ENABLED=true` env flag — kapatmak istersen tek satır
+
+#### 5.4 — Hata toleransı
+
+```typescript
+try {
+  const aiResult = await callClaudeHaiku(news);
+  await supabase.update({ ...aiResult });
+} catch (err) {
+  // AI başarısız oldu — orijinal başlık göster
+  await supabase.update({
+    title_tr: news.title_original,
+    summary_short: truncate(news.title_original, 40),
+    sentiment: 'neutral',
+    relevance: 5
+  });
+  // Logla, alarma düşür
+}
+```
+
+**Frontend her durumda çalışır.** AI yoksa ham başlık görünür.
+
+#### 5.5 — Sabah Brifingi (08:00 cron)
+
+Faz 4'teki 3 kart yetmez — sabah açıldığında **dünden bugüne ne oldu** özeti lazım. Bu daha büyük bir Claude çağrısı, ama günde sadece 1 kez:
+
+```typescript
+// /api/cron/digest — schedule: "0 8 * * *"
+const last24h = await supabase
+  .from('news')
+  .select('title_tr, sentiment, relevance, category')
+  .gte('published_at', oneDayAgo)
+  .gte('relevance', 6)        // sadece önemli olanlar
+  .order('relevance', { ascending: false })
+  .limit(40);
+
+const briefingPrompt = `Son 24 saatin altın piyasası haberleri (önem sırasına göre):
+
+${last24h.map((n, i) => `${i+1}. [${n.sentiment}] ${n.title_tr}`).join('\n')}
+
+Bu haberlere göre kuyumcu için BRİFİNG yaz. Format:
+
+**DÜN NE OLDU**
+[3 madde, her biri 1 cümle, en kritik olanlar]
+
+**BUGÜN DİKKAT**
+[2-3 madde, beklenen olaylar/açıklamalar]
+
+**TEK CÜMLELİK YORUM**
+[Müşteriye söylenebilecek seviyede, sade]
+`;
+```
+
+TV'de "06 // BUGÜN'ÜN BRİFİNGİ" kartında 24 saat boyunca durur. Sabah 08:00'de güncellenir. Ayda 30 çağrı × ~500 output token = ~5 TL.
+
+#### 5.6 — Frontend güncellemesi
+
+Faz 4'teki haber kartlarına AI alanları eklenir:
+
+```
+┌──────────────────────────────────────────────────────────┐
+│ 07 // 🔴 SON DAKİKA                          BHT · KTC · FRX │
+├──────────────────────────────────────────────────────────┤
+│ ● BHT 14:32 🔴 Karahan: Faiz koridorunda değişiklik yok   │
+│ ● KTC 14:31 🟢 Ons altın $47 düştü, Fed endişesi    [EN]  │
+│ ○ FRX 14:28 ⚪ Brent petrol %1.3 yükseldi                  │
+│ ○ BHT 14:21 🟢 TCMB rezervleri 165 milyar dolara çıktı    │
+└──────────────────────────────────────────────────────────┘
+```
+
+- 🔴 sentiment "negative" → kırmızı nokta = altın düşürücü haber
+- 🟢 sentiment "positive" → yeşil nokta = altın yükseltici  
+- ⚪ neutral → gri nokta
+- [EN] rozeti orijinal İngilizce olduğunu gösterir
+- Hover → `summary_medium` tooltip
+
+#### 5.7 — Çevre koşullarına göre adaptive sentiment vurgusu
+
+Eğer son 1 saatin haberleri ağırlıklı kırmızı (negatif altın) ise üstte küçük gösterge:
+
+```
+HABER SENTİMENTİ (son 1 saat): ████░░░░░░ %72 NEGATİF — altın baskı altında
+```
+
+Bu basit bir SQL agregasyon, ek Claude çağrısı gerektirmez. Müşteriye "neden altın düşmüş" sorusunun cevabı görsel olarak ortada.
+
+#### Çıktı (Faz 5 sonunda)
+- TÜM haberler temiz Türkçe, 40-60 karakter, TV'de pürüzsüz.
+- İngilizce haberler otomatik çevrili.
+- Her haberin yanında renkli sentiment noktası.
+- Sabah 08:00'de günün brifingi otomatik hazır.
+- Saatlik sentiment göstergesi.
 
 ---
 

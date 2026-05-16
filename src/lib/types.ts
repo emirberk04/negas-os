@@ -19,6 +19,20 @@ export const MAIN_SYMBOLS: SymbolMeta[] = [
   { symbol: "EUR_TRY", label: "EUR/TRY", unit: "TL" },
 ];
 
+export type NewsRow = {
+  id: number;
+  source_code: string;
+  source_name: string | null;
+  tier: "breaking" | "analiz" | "buyukresim";
+  region: string;
+  title_original: string;
+  title_tr: string | null;
+  link: string;
+  published_at: string | null;
+  sentiment: string | null;
+  created_at: string;
+};
+
 export const SARRAFIYE_SYMBOLS: SymbolMeta[] = [
   { symbol: "CEYREK_YENI", label: "ÇEYREK YENİ", unit: "TL" },
   { symbol: "CEYREK_ESKI", label: "ÇEYREK ESKİ", unit: "TL" },
