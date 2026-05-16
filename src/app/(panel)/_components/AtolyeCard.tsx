@@ -12,7 +12,7 @@ export function AtolyeCard() {
             NEGAŞ <span className="font-normal italic text-[var(--text-muted)]">Kuyumcu</span>
           </div>
           <div className="mt-0.5 text-[10px] uppercase tracking-wider text-[var(--text-muted)]">
-            Kuyumcular · İstanbul
+            Kuyumcular · Konya
           </div>
         </div>
       </div>
