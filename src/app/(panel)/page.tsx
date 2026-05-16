@@ -127,7 +127,7 @@ export default async function PanelPage() {
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text)]">
       <AlertBanner />
       <TopBar />
-      <main className="grid grid-cols-12 gap-3 p-3">
+      <main className="grid grid-cols-12 items-start gap-3 p-3">
         {/* Üst sıra */}
         <div className="col-span-12 lg:col-span-3">
           <AtolyeCard />
