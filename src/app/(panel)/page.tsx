@@ -14,6 +14,9 @@ import {
   type NewsRow,
 } from "@/lib/types";
 import { fetchHistory } from "@/lib/history";
+import { fetchKonyaWeather } from "@/lib/sources/openmeteo";
+import { fetchKonyaPrayerTimes } from "@/lib/sources/prayer";
+import { getBayramCountdown } from "@/lib/bayram";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -81,12 +84,16 @@ export default async function PanelPage() {
     ...MAIN_SYMBOLS.map((m) => m.symbol),
     ...SARRAFIYE_SYMBOLS.map((m) => m.symbol),
   ];
-  const [initial, history, news, briefing] = await Promise.all([
-    fetchPrices(),
-    fetchHistory(symbols, 60),
-    fetchNewsByTier(),
-    fetchBriefing(),
-  ]);
+  const [initial, history, news, briefing, weather, prayerSet] =
+    await Promise.all([
+      fetchPrices(),
+      fetchHistory(symbols, 60),
+      fetchNewsByTier(),
+      fetchBriefing(),
+      fetchKonyaWeather(),
+      fetchKonyaPrayerTimes(),
+    ]);
+  const bayram = getBayramCountdown();
 
   const mainInitial = Object.fromEntries(
     MAIN_SYMBOLS.map((m) => [m.symbol, initial[m.symbol]]).filter(([, v]) => v)
@@ -106,7 +113,11 @@ export default async function PanelPage() {
           <AtolyeCard />
         </div>
         <div className="col-span-12 lg:col-span-9">
-          <SessionCard />
+          <SessionCard
+            weather={weather}
+            prayerSet={prayerSet}
+            bayram={bayram}
+          />
         </div>
 
         {/* Orta sıra — Ana fiyatlar + Alarm */}
